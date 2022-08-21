@@ -27,6 +27,7 @@ pub mod buffer {
     use crate::{Rectangle, Screen};
     use anyhow;
     use std::{
+        cmp::min,
         fs::File,
         io::{BufRead, BufReader},
         iter::repeat,
@@ -68,9 +69,66 @@ pub mod buffer {
                 lines.extend(repeat(String::new()).take(extra_count));
             }
 
-            let cursor = crate::Cursor::default();
+            let cursor = crate::Cursor {
+                row: self.cursor.row,
+                col: self.cursor.col,
+            };
 
             Screen { lines, cursor }
+        }
+
+        pub fn move_cursor(&mut self, movement: CursorMovement) {
+            match movement {
+                CursorMovement::Up => {
+                    self.cursor.row = self.cursor.row.saturating_sub(1);
+                    self.snap_cursor_after_vertical_movement()
+                }
+                CursorMovement::Down => {
+                    self.cursor.row = min(self.lines.len(), self.cursor.row.saturating_add(1));
+                    self.snap_cursor_after_vertical_movement()
+                }
+                CursorMovement::Left => {
+                    if self.cursor_at_line_start() {
+                        if !self.cursor_at_first_line() {
+                            self.cursor.row -= 1;
+                            self.cursor.col = self.lines[self.cursor.row].len().saturating_sub(1);
+                        }
+                    } else {
+                        self.cursor.col -= 1;
+                    }
+                }
+                CursorMovement::Right => {
+                    if self.cursor_at_line_end() {
+                        if !self.cursor_at_last_line() {
+                            self.cursor.row += 1;
+                            self.cursor.col = 0;
+                        }
+                    } else {
+                        self.cursor.col += 1;
+                    }
+                }
+            }
+        }
+
+        fn snap_cursor_after_vertical_movement(&mut self) {
+            let max_col = self.lines[self.cursor.row].len().saturating_sub(1);
+            self.cursor.col = min(self.cursor.col, max_col);
+        }
+
+        fn cursor_at_line_start(&self) -> bool {
+            self.cursor.col == 0
+        }
+
+        fn cursor_at_line_end(&self) -> bool {
+            self.cursor.col == self.lines[self.cursor.row].len().saturating_sub(1)
+        }
+
+        fn cursor_at_first_line(&self) -> bool {
+            self.cursor.row == 0
+        }
+
+        fn cursor_at_last_line(&self) -> bool {
+            self.cursor.row == self.lines.len().saturating_sub(1)
         }
     }
 
@@ -95,6 +153,13 @@ pub mod buffer {
         fn default() -> Self {
             Self::new(0, 0)
         }
+    }
+
+    pub enum CursorMovement {
+        Up,
+        Down,
+        Left,
+        Right,
     }
 }
 
