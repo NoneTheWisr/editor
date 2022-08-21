@@ -1,6 +1,7 @@
-use crossterm::{event, terminal};
-use editor::*;
+use crossterm::{cursor::MoveTo, event, queue, style::Print, terminal};
+use editor::{buffer::Buffer, terminal::AlternateScreen, Cursor, Rectangle, Screen};
 use std::env::args;
+use std::io::{stdout, BufWriter, Write};
 
 fn main() {
     let _screen = AlternateScreen::new();
@@ -21,19 +22,35 @@ fn main() {
         }
     };
 
+    render_screen(&buffer.screen(&terminal_rectangle())).unwrap();
+
+    event::read().unwrap();
+}
+
+fn render_screen(screen: &Screen) -> anyhow::Result<()> {
+    let mut stdout = BufWriter::new(stdout());
+
+    let (last_line, lines) = screen.lines.split_last().unwrap();
+    for line in lines {
+        queue!(stdout, Print(line))?;
+        queue!(stdout, Print("\r\n"))?;
+    }
+    queue!(stdout, Print(last_line))?;
+
+    let Cursor { row, col } = screen.cursor;
+    queue!(stdout, MoveTo(col as u16, row as u16))?;
+
+    stdout.flush()?;
+
+    Ok(())
+}
+
+fn terminal_rectangle() -> Rectangle {
     let (cols, rows) = terminal::size().unwrap();
-    let term_rect = Rectangle {
+    Rectangle {
         row: 0,
         col: 0,
         width: cols as _,
         height: rows as _,
-    };
-
-    let lines = buffer.screen(&term_rect).lines;
-    let (last, rest) = lines.split_last().unwrap();
-
-    rest.iter().for_each(|line| print!("{line}\r\n"));
-    print!("{last}");
-
-    event::read().unwrap();
+    }
 }
