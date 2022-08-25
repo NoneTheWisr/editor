@@ -24,10 +24,9 @@ pub mod terminal {
 }
 
 pub mod buffer {
-    use crate::{Rectangle, Screen};
+    use crate::display::Rectangle;
     use anyhow;
     use std::{
-        cmp::min,
         fs::File,
         io::{BufRead, BufReader},
         iter::repeat,
@@ -36,25 +35,20 @@ pub mod buffer {
 
     pub struct Buffer {
         lines: Vec<String>,
-        cursor: Cursor,
     }
 
     impl Buffer {
         pub fn new() -> Self {
-            Self {
-                lines: Vec::new(),
-                cursor: Cursor::default(),
-            }
+            Self { lines: Vec::new() }
         }
 
         pub fn from_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
             let file = File::open(path)?;
             let lines = BufReader::new(file).lines().collect::<Result<_, _>>()?;
-            let cursor = Cursor::default();
-            Ok(Self { lines, cursor })
+            Ok(Self { lines })
         }
 
-        pub fn screen(&self, rect: &Rectangle) -> Screen {
+        pub fn rect(&self, rect: &Rectangle) -> Vec<String> {
             // TODO: horizontal cropping
             let mut lines: Vec<String> = self
                 .lines
@@ -69,66 +63,79 @@ pub mod buffer {
                 lines.extend(repeat(String::new()).take(extra_count));
             }
 
-            let cursor = crate::Cursor {
-                row: self.cursor.row,
-                col: self.cursor.col,
-            };
-
-            Screen { lines, cursor }
+            lines
         }
 
-        pub fn move_cursor(&mut self, movement: CursorMovement) {
+        pub fn line_count(&self) -> usize {
+            self.lines.len()
+        }
+
+        pub fn line_length(&self, line_number: usize) -> usize {
+            self.lines[line_number].len()
+        }
+
+        pub fn is_at_line_start(&self, cursor: &Cursor) -> bool {
+            cursor.col == 0
+        }
+
+        pub fn is_at_line_end(&self, cursor: &Cursor) -> bool {
+            cursor.col == self.lines[cursor.row].len().saturating_sub(1)
+        }
+
+        pub fn is_at_first_line(&self, cursor: &Cursor) -> bool {
+            cursor.row == 0
+        }
+
+        pub fn is_at_last_line(&self, cursor: &Cursor) -> bool {
+            cursor.row == self.lines.len().saturating_sub(1)
+        }
+
+        pub fn clamp(&self, mut cursor: Cursor) -> Cursor {
+            let max_col = self.lines[cursor.row].len();
+            cursor.col = std::cmp::min(cursor.col, max_col);
+            cursor
+        }
+
+        pub fn move_cursor(
+            &self,
+            mut cursor: Cursor,
+            movement: crate::logic::CursorMovement,
+        ) -> Cursor {
+            use crate::logic::CursorMovement;
+            use std::cmp::min;
+
             match movement {
                 CursorMovement::Up => {
-                    self.cursor.row = self.cursor.row.saturating_sub(1);
-                    self.snap_cursor_after_vertical_movement()
+                    cursor.row = cursor.row.saturating_sub(1);
+                    cursor = self.clamp(cursor);
                 }
                 CursorMovement::Down => {
-                    self.cursor.row = min(self.lines.len(), self.cursor.row.saturating_add(1));
-                    self.snap_cursor_after_vertical_movement()
+                    cursor.row = min(self.line_count(), cursor.row.saturating_add(1));
+                    cursor = self.clamp(cursor);
                 }
                 CursorMovement::Left => {
-                    if self.cursor_at_line_start() {
-                        if !self.cursor_at_first_line() {
-                            self.cursor.row -= 1;
-                            self.cursor.col = self.lines[self.cursor.row].len().saturating_sub(1);
+                    if self.is_at_line_start(&cursor) {
+                        if !self.is_at_first_line(&cursor) {
+                            cursor.row -= 1;
+                            cursor.col = self.line_length(cursor.row).saturating_sub(1);
                         }
                     } else {
-                        self.cursor.col -= 1;
+                        cursor.col -= 1;
                     }
                 }
                 CursorMovement::Right => {
-                    if self.cursor_at_line_end() {
-                        if !self.cursor_at_last_line() {
-                            self.cursor.row += 1;
-                            self.cursor.col = 0;
+                    if self.is_at_line_end(&cursor) {
+                        if !self.is_at_last_line(&cursor) {
+                            cursor.row += 1;
+                            cursor.col = 0;
                         }
                     } else {
-                        self.cursor.col += 1;
+                        cursor.col += 1;
                     }
                 }
             }
-        }
 
-        fn snap_cursor_after_vertical_movement(&mut self) {
-            let max_col = self.lines[self.cursor.row].len().saturating_sub(1);
-            self.cursor.col = min(self.cursor.col, max_col);
-        }
-
-        fn cursor_at_line_start(&self) -> bool {
-            self.cursor.col == 0
-        }
-
-        fn cursor_at_line_end(&self) -> bool {
-            self.cursor.col == self.lines[self.cursor.row].len().saturating_sub(1)
-        }
-
-        fn cursor_at_first_line(&self) -> bool {
-            self.cursor.row == 0
-        }
-
-        fn cursor_at_last_line(&self) -> bool {
-            self.cursor.row == self.lines.len().saturating_sub(1)
+            cursor
         }
     }
 
@@ -138,7 +145,116 @@ pub mod buffer {
         }
     }
 
-    struct Cursor {
+    #[derive(Clone, Copy, Default)]
+    pub struct Cursor {
+        pub row: usize,
+        pub col: usize,
+    }
+
+    impl Cursor {
+        pub fn new(row: usize, col: usize) -> Self {
+            Self { row, col }
+        }
+    }
+
+    impl From<crate::logic::Cursor> for Cursor {
+        fn from(cursor: crate::logic::Cursor) -> Self {
+            Self::new(cursor.row, cursor.col)
+        }
+    }
+}
+
+pub mod logic {
+    pub struct View {
+        pub row: usize,
+        pub col: usize,
+        pub width: usize,
+        pub height: usize,
+    }
+
+    impl View {
+        pub fn with_dimensions(width: usize, height: usize) -> Self {
+            Self {
+                row: 0,
+                col: 0,
+                width,
+                height,
+            }
+        }
+
+        pub fn first_row(&self) -> usize {
+            self.row
+        }
+
+        pub fn last_row(&self) -> usize {
+            self.row + self.height.saturating_sub(1)
+        }
+
+        pub fn first_col(&self) -> usize {
+            self.col
+        }
+
+        pub fn last_col(&self) -> usize {
+            self.col + self.width.saturating_sub(1)
+        }
+    }
+
+    #[derive(Clone, Copy, Default)]
+    pub struct Cursor {
+        pub row: usize,
+        pub col: usize,
+    }
+
+    impl Cursor {
+        pub fn new(row: usize, col: usize) -> Self {
+            Self { row, col }
+        }
+    }
+
+    impl From<crate::buffer::Cursor> for Cursor {
+        fn from(cursor: crate::buffer::Cursor) -> Self {
+            Self::new(cursor.row, cursor.col)
+        }
+    }
+
+    pub enum CursorMovement {
+        Up,
+        Down,
+        Left,
+        Right,
+    }
+
+    pub fn move_cursor_with_view(
+        buffer: &crate::buffer::Buffer,
+        mut cursor: Cursor,
+        mut view: View,
+        movement: CursorMovement,
+    ) -> (Cursor, View) {
+        cursor = buffer.move_cursor(cursor.into(), movement).into();
+
+        if cursor.row < view.first_row() {
+            view.row = cursor.row;
+        } else if cursor.row > view.last_row() {
+            view.row += cursor.row - view.last_row();
+        }
+
+        if cursor.col < view.first_col() {
+            view.col = cursor.col;
+        } else if cursor.col > view.last_col() {
+            view.col += cursor.col - view.last_col();
+        }
+
+        (cursor, view)
+    }
+}
+
+pub mod display {
+    pub struct Screen {
+        pub lines: Vec<String>,
+        pub cursor: Cursor,
+    }
+
+    pub struct Cursor {
         pub row: usize,
         pub col: usize,
     }
@@ -155,55 +271,27 @@ pub mod buffer {
         }
     }
 
-    pub enum CursorMovement {
-        Up,
-        Down,
-        Left,
-        Right,
+    pub struct Rectangle {
+        pub row: usize,
+        pub col: usize,
+        pub width: usize,
+        pub height: usize,
     }
-}
 
-pub struct Offset {
-    pub row: usize,
-    pub col: usize,
-}
-
-pub struct Bounds {
-    pub width: usize,
-    pub height: usize,
-}
-
-pub struct Rectangle {
-    pub row: usize,
-    pub col: usize,
-    pub width: usize,
-    pub height: usize,
-}
-
-impl Rectangle {
-    pub fn fits_vertically(&self, line_count: usize) -> bool {
-        self.row + self.height <= line_count
+    impl Rectangle {
+        pub fn fits_vertically(&self, line_count: usize) -> bool {
+            self.row + self.height <= line_count
+        }
     }
-}
 
-pub struct Cursor {
-    pub row: usize,
-    pub col: usize,
-}
-
-impl Cursor {
-    pub fn new(row: usize, col: usize) -> Self {
-        Self { row, col }
+    impl From<crate::logic::View> for Rectangle {
+        fn from(view: crate::logic::View) -> Self {
+            Self {
+                row: view.row,
+                col: view.col,
+                width: view.width,
+                height: view.height,
+            }
+        }
     }
-}
-
-impl Default for Cursor {
-    fn default() -> Self {
-        Self::new(0, 0)
-    }
-}
-
-pub struct Screen {
-    pub lines: Vec<String>,
-    pub cursor: Cursor,
 }

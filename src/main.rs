@@ -1,7 +1,12 @@
 use crossterm::event::Event;
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{cursor::MoveTo, event, queue, style::Print, terminal};
-use editor::{buffer::Buffer, terminal::AlternateScreen, Cursor, Rectangle, Screen};
+use editor::logic::View;
+use editor::{
+    buffer::Buffer,
+    display::{Cursor, Rectangle, Screen},
+    terminal::AlternateScreen,
+};
 use std::env::args;
 use std::io::{stdout, BufWriter, Write};
 
@@ -24,7 +29,10 @@ fn main() {
         }
     };
 
-    render_screen(&buffer.screen(&terminal_rectangle())).unwrap();
+    let terminal_rect = terminal_rectangle();
+    let mut view = View::with_dimensions(terminal_rect.width, terminal_rect.height);
+
+    render_screen(&buffer.rect(&view.into())).unwrap();
 
     while let Ok(event) = event::read() {
         if let Event::Key(event) = event {
@@ -42,7 +50,7 @@ fn main() {
                 _ => (),
             }
 
-            render_screen(&buffer.screen(&terminal_rectangle())).unwrap();
+            render_screen(&buffer.rect(&terminal_rectangle())).unwrap();
         }
     }
 }
