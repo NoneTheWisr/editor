@@ -25,6 +25,7 @@ pub mod terminal {
 
 pub mod buffer {
     use std::{
+        cmp::min,
         fs::File,
         io::{BufRead, BufReader},
         path::Path,
@@ -80,39 +81,84 @@ pub mod buffer {
         pub fn move_cursor(&mut self, movement: CursorMovement) {
             match movement {
                 CursorMovement::Up => {
-                    self.cursor.y = self.cursor.y.saturating_sub(1);
-                    self.clamp_cursor_to_line();
+                    if !self.cursor_at_first_line() {
+                        self.cursor.move_up();
+                    }
+                    self.clamp_cursor_to_line_boundaries();
                 }
                 CursorMovement::Down => {
-                    self.cursor.y = std::cmp::min(
-                        self.cursor.y.saturating_add(1),
-                        self.line_count().saturating_sub(1),
-                    );
-                    self.clamp_cursor_to_line();
+                    if !self.cursor_at_last_line() {
+                        self.cursor.move_down();
+                    }
+                    self.clamp_cursor_to_line_boundaries();
                 }
                 CursorMovement::Left => {
                     if self.cursor_at_line_start() {
                         if !self.cursor_at_first_line() {
-                            self.cursor.y -= 1;
-                            self.cursor.x = self.line_len(self.cursor.y).saturating_sub(1);
+                            self.cursor.move_up();
+                            self.cursor.x = self.line_len(self.cursor.y);
                         }
                     } else {
-                        self.cursor.x -= 1;
+                        self.cursor.move_left();
                     }
                 }
                 CursorMovement::Right => {
                     if self.cursor_at_line_end() {
                         if !self.cursor_at_last_line() {
-                            self.cursor.y += 1;
-                            self.cursor.x = 0;
+                            self.cursor.move_to_start_of_next_line();
                         }
                     } else {
-                        self.cursor.x += 1;
+                        self.cursor.move_right();
                     }
+                }
+                CursorMovement::LineStart => {
+                    self.cursor.move_to_start_of_line();
+                }
+                CursorMovement::LineEnd => {
+                    self.cursor.x = self.line_len(self.cursor.y);
                 }
             }
 
-            self.adjust_view()
+            self.adjust_view();
+        }
+
+        pub fn insert_char(&mut self, character: char) {
+            self.lines[self.cursor.y].insert(self.cursor.x, character);
+            self.cursor.move_right();
+        }
+
+        pub fn remove_char(&mut self) {
+            if self.lines[self.cursor.y].is_empty() {
+                if !self.cursor_at_first_line() {
+                    self.lines.remove(self.cursor.y);
+                }
+            } else if self.cursor.x == self.line_len(self.cursor.y) {
+                self.join_lines(self.cursor.y, self.cursor.y + 1);
+            } else {
+                self.lines[self.cursor.y].remove(self.cursor.x);
+            }
+        }
+
+        pub fn insert_line(&mut self) {
+            self.lines.insert(
+                self.cursor.y + 1,
+                self.lines[self.cursor.y][self.cursor.x..].to_string(),
+            );
+            self.lines[self.cursor.y].replace_range(self.cursor.x.., "");
+
+            self.cursor.move_to_start_of_next_line();
+        }
+
+        pub fn join_lines(&mut self, first: usize, last: usize) {
+            self.lines.splice(
+                first..=last,
+                std::iter::once(
+                    self.lines[first..=last]
+                        .into_iter()
+                        .flat_map(|line| line.chars())
+                        .collect::<String>(),
+                ),
+            );
         }
 
         fn adjust_view(&mut self) {
@@ -129,10 +175,6 @@ pub mod buffer {
             }
         }
 
-        fn line_count(&self) -> usize {
-            self.lines.len()
-        }
-
         fn line_len(&self, line_number: usize) -> usize {
             self.lines[line_number].len()
         }
@@ -142,7 +184,7 @@ pub mod buffer {
         }
 
         fn cursor_at_line_end(&self) -> bool {
-            self.cursor.x == self.lines[self.cursor.y].len().saturating_sub(1)
+            self.cursor.x == self.lines[self.cursor.y].len()
         }
 
         fn cursor_at_first_line(&self) -> bool {
@@ -153,9 +195,9 @@ pub mod buffer {
             self.cursor.y == self.lines.len().saturating_sub(1)
         }
 
-        fn clamp_cursor_to_line(&mut self) {
+        fn clamp_cursor_to_line_boundaries(&mut self) {
             let max_col = self.lines[self.cursor.y].len();
-            self.cursor.x = std::cmp::min(self.cursor.x, max_col);
+            self.cursor.x = min(self.cursor.x, max_col);
         }
     }
 
@@ -163,6 +205,39 @@ pub mod buffer {
     pub struct Cursor {
         x: usize,
         y: usize,
+    }
+
+    // I like the idea of these methods, but I don't like how
+    // verbose the naming is. I also dislike that not all of
+    // such methods can be on the cursor. Some have to be on
+    // the buffer, because line lengths and line count must
+    // be known (those can be passed as parameters, but that
+    // seems a little silly.
+    impl Cursor {
+        pub fn move_right(&mut self) {
+            self.x += 1;
+        }
+
+        pub fn move_left(&mut self) {
+            self.x -= 1;
+        }
+
+        pub fn move_up(&mut self) {
+            self.y -= 1;
+        }
+
+        pub fn move_down(&mut self) {
+            self.y += 1;
+        }
+
+        pub fn move_to_start_of_line(&mut self) {
+            self.x = 0;
+        }
+
+        pub fn move_to_start_of_next_line(&mut self) {
+            self.move_down();
+            self.move_to_start_of_line();
+        }
     }
 
     impl Cursor {
@@ -210,6 +285,8 @@ pub mod buffer {
         Down,
         Left,
         Right,
+        LineStart,
+        LineEnd,
     }
 }
 

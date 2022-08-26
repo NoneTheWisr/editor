@@ -36,7 +36,7 @@ fn main() -> anyhow::Result<()> {
     while let Ok(event) = event::read() {
         if let Event::Key(event) = event {
             use editor::buffer::CursorMovement;
-            use event::KeyCode::*;
+            use event::{KeyCode::*, KeyModifiers};
 
             match (event.code, event.modifiers) {
                 (Esc | Char('q'), _) => break,
@@ -45,6 +45,19 @@ fn main() -> anyhow::Result<()> {
                 (Down, _) => buffer.move_cursor(CursorMovement::Down),
                 (Left, _) => buffer.move_cursor(CursorMovement::Left),
                 (Right, _) => buffer.move_cursor(CursorMovement::Right),
+
+                (Home, _) => buffer.move_cursor(CursorMovement::LineStart),
+                (End, _) => buffer.move_cursor(CursorMovement::LineEnd),
+
+                (Delete, _) => buffer.remove_char(),
+                (Backspace, _) => {
+                    buffer.move_cursor(CursorMovement::Left);
+                    buffer.remove_char();
+                }
+                (Enter, _) => buffer.insert_line(),
+
+                (Char(c), KeyModifiers::SHIFT) => buffer.insert_char(c.to_ascii_uppercase()),
+                (Char(c), _) => buffer.insert_char(c),
 
                 _ => (),
             }
