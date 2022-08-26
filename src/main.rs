@@ -33,31 +33,41 @@ fn main() -> anyhow::Result<()> {
 
     render_screen(&buffer.display())?;
 
+    let mut mode = Mode::Normal;
+
     while let Ok(event) = event::read() {
         if let Event::Key(event) = event {
             use editor::buffer::CursorMovement;
             use event::{KeyCode::*, KeyModifiers};
 
-            match (event.code, event.modifiers) {
-                (Esc | Char('q'), _) => break,
+            match (mode, event.code, event.modifiers) {
+                (Mode::Normal, Char('q'), _) => break,
 
-                (Up, _) => buffer.move_cursor(CursorMovement::Up),
-                (Down, _) => buffer.move_cursor(CursorMovement::Down),
-                (Left, _) => buffer.move_cursor(CursorMovement::Left),
-                (Right, _) => buffer.move_cursor(CursorMovement::Right),
+                (Mode::Insert, Esc, _) => mode = Mode::Normal,
+                (Mode::Normal, Char('i'), _) => mode = Mode::Insert,
 
-                (Home, _) => buffer.move_cursor(CursorMovement::LineStart),
-                (End, _) => buffer.move_cursor(CursorMovement::LineEnd),
+                (Mode::Normal, Char('d'), _) => buffer.remove_char(),
 
-                (Delete, _) => buffer.remove_char(),
-                (Backspace, _) => {
+                (Mode::Normal, Char('k'), _) => buffer.move_cursor(CursorMovement::Up),
+                (Mode::Normal, Char('j'), _) => buffer.move_cursor(CursorMovement::Down),
+                (Mode::Normal, Char('h'), _) => buffer.move_cursor(CursorMovement::Left),
+                (Mode::Normal, Char('l'), _) => buffer.move_cursor(CursorMovement::Right),
+
+                (_, Home, _) => buffer.move_cursor(CursorMovement::LineStart),
+                (_, End, _) => buffer.move_cursor(CursorMovement::LineEnd),
+
+                (Mode::Insert, Delete, _) => buffer.remove_char(),
+                (Mode::Insert, Backspace, _) => {
                     buffer.move_cursor(CursorMovement::Left);
                     buffer.remove_char();
                 }
-                (Enter, _) => buffer.insert_line(),
 
-                (Char(c), KeyModifiers::SHIFT) => buffer.insert_char(c.to_ascii_uppercase()),
-                (Char(c), _) => buffer.insert_char(c),
+                (Mode::Insert, Enter, _) => buffer.insert_line(),
+
+                (Mode::Insert, Char(c), KeyModifiers::SHIFT) => {
+                    buffer.insert_char(c.to_ascii_uppercase())
+                }
+                (Mode::Insert, Char(c), _) => buffer.insert_char(c),
 
                 _ => (),
             }
@@ -67,6 +77,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum Mode {
+    Normal,
+    Insert,
 }
 
 fn render_screen(screen: &Screen) -> anyhow::Result<()> {
