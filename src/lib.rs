@@ -143,12 +143,10 @@ pub mod buffer {
         }
 
         pub fn remove_char(&mut self) {
-            if self.lines[self.cursor.y].is_empty() {
-                if !self.cursor_at_first_line() {
-                    self.lines.remove(self.cursor.y);
+            if self.cursor_at_line_end() {
+                if !self.cursor_at_last_line() {
+                    self.join_lines(self.cursor.y, self.cursor.y + 1);
                 }
-            } else if self.cursor.x == self.line_len(self.cursor.y) {
-                self.join_lines(self.cursor.y, self.cursor.y + 1);
             } else {
                 self.lines[self.cursor.y].remove(self.cursor.x);
             }
