@@ -53,6 +53,8 @@ fn main() -> anyhow::Result<()> {
                 (Mode::Normal, Char('h'), _) => buffer.move_cursor(CursorMovement::Left),
                 (Mode::Normal, Char('l'), _) => buffer.move_cursor(CursorMovement::Right),
 
+                (Mode::Normal, Char(':'), _) => read_command(&mut buffer)?,
+
                 (_, Home, _) => buffer.move_cursor(CursorMovement::LineStart),
                 (_, End, _) => buffer.move_cursor(CursorMovement::LineEnd),
 
@@ -85,6 +87,45 @@ enum Mode {
     Insert,
 }
 
+fn read_command(buffer: &mut Buffer) -> anyhow::Result<()> {
+    let mut command = String::new();
+    render_command_prompt(&command)?;
+
+    while let Ok(event) = event::read() {
+        if let Event::Key(event) = event {
+            use event::{KeyCode::*, KeyModifiers};
+
+            match (event.code, event.modifiers) {
+                (Esc, _) => break,
+
+                (Char(c), KeyModifiers::SHIFT) => command.push(c.to_ascii_uppercase()),
+                (Char(c), _) => command.push(c),
+
+                (Backspace, _) => {
+                    command.pop();
+                }
+
+                (Enter, _) => return process_command(buffer, command),
+
+                _ => (),
+            }
+
+            render_command_prompt(&command)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn process_command(buffer: &mut Buffer, command: String) -> anyhow::Result<()> {
+    if command == "w" {
+        buffer.save()?;
+    } else if command.starts_with("w ") {
+        buffer.save_as(&command[2..])?;
+    }
+    Ok(())
+}
+
 fn render_screen(screen: &Screen) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -92,6 +133,7 @@ fn render_screen(screen: &Screen) -> anyhow::Result<()> {
     queue!(stdout, Clear(ClearType::All))?;
     queue!(stdout, MoveTo(0, 0))?;
 
+    // TODO: remove the context.
     let (last_line, lines) = screen.lines.split_last().context("coulnd't split")?;
     for line in lines {
         queue!(stdout, Print(line))?;
@@ -101,6 +143,27 @@ fn render_screen(screen: &Screen) -> anyhow::Result<()> {
 
     let Cursor { x, y } = screen.cursor;
     queue!(stdout, MoveTo(x as u16, y as u16))?;
+
+    stdout.flush()?;
+
+    Ok(())
+}
+
+fn render_command_prompt(command: &str) -> anyhow::Result<()> {
+    use crossterm::cursor::MoveToColumn;
+    use crossterm::style::Stylize;
+
+    let (width, height) = terminal::size()?;
+
+    let mut stdout = BufWriter::new(stdout());
+    queue!(stdout, MoveTo(0, height - 1))?;
+    queue!(stdout, Clear(ClearType::UntilNewLine))?;
+
+    queue!(
+        stdout,
+        Print(format!(":{command:0$.0$}", (width - 1) as _).on_dark_grey())
+    )?;
+    queue!(stdout, MoveToColumn((command.len() + 1) as _))?;
 
     stdout.flush()?;
 
