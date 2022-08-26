@@ -28,13 +28,14 @@ pub mod buffer {
         cmp::min,
         fs::File,
         io::{BufRead, BufReader},
-        path::Path,
+        path::{Path, PathBuf},
     };
 
     pub struct Buffer {
         lines: Vec<String>,
         cursor: Cursor,
         view: View,
+        file_path: Option<PathBuf>,
     }
 
     impl Buffer {
@@ -43,18 +44,32 @@ pub mod buffer {
                 lines: vec![String::new()],
                 cursor: Cursor::default(),
                 view,
+                file_path: None,
             }
         }
 
         pub fn from_path(path: impl AsRef<Path>, view: View) -> anyhow::Result<Self> {
-            let file = File::open(path)?;
+            let path = path.as_ref().to_path_buf();
+            let file = File::open(&path)?;
             let reader = BufReader::new(file);
 
             Ok(Self {
                 lines: reader.lines().collect::<Result<_, _>>()?,
                 cursor: Cursor::default(),
                 view,
+                file_path: Some(path),
             })
+        }
+
+        pub fn save(&mut self) -> std::io::Result<()> {
+            self.save_as(&self.file_path.clone().unwrap())
+        }
+
+        pub fn save_as(&mut self, path: impl AsRef<Path>) -> std::io::Result<()> {
+            let path = path.as_ref().to_path_buf();
+            std::fs::write(&path, self.lines.join("\n"))?;
+            self.file_path = Some(path);
+            Ok(())
         }
 
         pub fn display(&self) -> crate::display::Screen {
