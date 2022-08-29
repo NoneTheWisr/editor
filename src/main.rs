@@ -124,9 +124,9 @@ fn process_command(buffer: &mut Buffer, command: String) -> anyhow::Result<()> {
     if command == "w" {
         buffer.save()?;
     } else if command.starts_with("w ") {
-        buffer.save_as(&command[2..])?;
+        buffer.save_as(shellexpand::full(&command[2..])?.as_ref())?;
     } else if command.starts_with("o ") {
-        *buffer = Buffer::from_path(&command[2..], make_view()?)?;
+        *buffer = Buffer::from_path(shellexpand::full(&command[2..])?.as_ref(), make_view()?)?;
     }
     Ok(())
 }

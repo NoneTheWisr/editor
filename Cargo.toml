@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.62"
 crossterm = "0.25.0"
+shellexpand = "2.1.2"
