@@ -13,9 +13,7 @@ fn main() -> anyhow::Result<()> {
     let _screen = AlternateScreen::new();
     let args: Vec<String> = args().skip(1).collect();
 
-    let (width, height) = terminal::size()?;
-    let view = View::new(width as _, height as _);
-
+    let view = make_view()?;
     let buffer = match args.len() {
         0 => Ok(Buffer::new(view)),
         1 => Buffer::from_path(&args[0], view).map_err(|_| "couldn't open the file"),
@@ -87,6 +85,11 @@ enum Mode {
     Insert,
 }
 
+fn make_view() -> anyhow::Result<View> {
+    let (width, height) = terminal::size()?;
+    Ok(View::new(width as _, height as _))
+}
+
 fn read_command(buffer: &mut Buffer) -> anyhow::Result<()> {
     let mut command = String::new();
     render_command_prompt(&command)?;
@@ -122,6 +125,8 @@ fn process_command(buffer: &mut Buffer, command: String) -> anyhow::Result<()> {
         buffer.save()?;
     } else if command.starts_with("w ") {
         buffer.save_as(&command[2..])?;
+    } else if command.starts_with("o ") {
+        *buffer = Buffer::from_path(&command[2..], make_view()?)?;
     }
     Ok(())
 }
