@@ -174,6 +174,11 @@ pub mod buffer {
             self.cursor.move_right();
         }
 
+        pub fn insert_string(&mut self, string: &str) {
+            self.lines[self.cursor.y].insert_str(self.cursor.x, string);
+            self.cursor.x += string.len();
+        }
+
         pub fn remove_char(&mut self) {
             if self.cursor_at_line_end() {
                 if !self.cursor_at_last_line() {

@@ -87,6 +87,7 @@ fn main() -> anyhow::Result<()> {
 
                 (Mode::Insert, Enter, _) => buffer.insert_line(),
 
+                (Mode::Insert, Tab, _) => buffer.insert_string("    "),
                 (Mode::Insert, Char(c), KeyModifiers::SHIFT) => {
                     buffer.insert_char(c.to_ascii_uppercase())
                 }
