@@ -29,9 +29,8 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
-    render_screen(&buffer.display())?;
-
     let mut mode = Mode::Normal;
+    render(&buffer, &mode)?;
 
     while let Ok(event) = event::read() {
         if let Event::Key(event) = event {
@@ -72,7 +71,7 @@ fn main() -> anyhow::Result<()> {
                 _ => (),
             }
 
-            render_screen(&buffer.display())?;
+            render(&buffer, &mode)?;
         }
     }
 
@@ -87,6 +86,7 @@ enum Mode {
 
 fn make_view() -> anyhow::Result<View> {
     let (width, height) = terminal::size()?;
+    let height = height.saturating_sub(1);
     Ok(View::new(width as _, height as _))
 }
 
@@ -131,11 +131,39 @@ fn process_command(buffer: &mut Buffer, command: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn render_screen(screen: &Screen) -> anyhow::Result<()> {
-    use anyhow::Context;
+fn render(buffer: &Buffer, mode: &Mode) -> anyhow::Result<()> {
+    use crossterm::style::Stylize;
 
     let mut stdout = BufWriter::new(stdout());
-    queue!(stdout, Clear(ClearType::All))?;
+
+    queue!(stdout, MoveTo(0, buffer.view().height as _))?;
+    let status = match mode {
+        Mode::Normal => "NORMAL",
+        Mode::Insert => "INSERT",
+    };
+    let path = match buffer.file_path() {
+        Some(path) => path.to_string_lossy().into_owned(),
+        None => String::from("[scratch]"),
+    };
+    let editor::buffer::Cursor { x, y } = buffer.cursor();
+    let count = buffer.line_count();
+    let line_info = format!("{}:{}/{count}", x + 1, y + 1);
+    let status = format!(" <{status}> [{line_info}] {path}");
+    queue!(
+        stdout,
+        Print(format!("{status:0$.0$}", buffer.view().width as _).on_dark_grey())
+    )?;
+
+    render_screen(&buffer.display(), &mut stdout)?;
+
+    stdout.flush()?;
+
+    Ok(())
+}
+
+fn render_screen(screen: &Screen, stdout: &mut impl Write) -> anyhow::Result<()> {
+    use anyhow::Context;
+
     queue!(stdout, MoveTo(0, 0))?;
 
     // TODO: remove the context.
@@ -143,13 +171,13 @@ fn render_screen(screen: &Screen) -> anyhow::Result<()> {
     for line in lines {
         queue!(stdout, Print(line))?;
         queue!(stdout, Print("\r\n"))?;
+        queue!(stdout, Clear(ClearType::UntilNewLine))?;
     }
     queue!(stdout, Print(last_line))?;
+    queue!(stdout, Clear(ClearType::UntilNewLine))?;
 
     let Cursor { x, y } = screen.cursor;
     queue!(stdout, MoveTo(x as u16, y as u16))?;
-
-    stdout.flush()?;
 
     Ok(())
 }

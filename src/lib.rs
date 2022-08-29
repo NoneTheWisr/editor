@@ -72,6 +72,22 @@ pub mod buffer {
             Ok(())
         }
 
+        pub fn view(&self) -> &View {
+            &self.view
+        }
+
+        pub fn cursor(&self) -> &Cursor {
+            &self.cursor
+        }
+
+        pub fn line_count(&self) -> usize {
+            self.lines.len()
+        }
+
+        pub fn file_path(&self) -> Option<&Path> {
+            self.file_path.as_deref()
+        }
+
         pub fn display(&self) -> crate::display::Screen {
             let lines = self
                 .lines
@@ -216,8 +232,8 @@ pub mod buffer {
 
     #[derive(Default)]
     pub struct Cursor {
-        x: usize,
-        y: usize,
+        pub x: usize,
+        pub y: usize,
     }
 
     // I like the idea of these methods, but I don't like how
@@ -260,10 +276,10 @@ pub mod buffer {
     }
 
     pub struct View {
-        x: usize,
-        y: usize,
-        width: usize,
-        height: usize,
+        pub x: usize,
+        pub y: usize,
+        pub width: usize,
+        pub height: usize,
     }
 
     impl View {
