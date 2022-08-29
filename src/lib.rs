@@ -26,8 +26,7 @@ pub mod terminal {
 pub mod buffer {
     use std::{
         cmp::min,
-        fs::File,
-        io::{BufRead, BufReader},
+        fs,
         path::{Path, PathBuf},
     };
 
@@ -50,11 +49,9 @@ pub mod buffer {
 
         pub fn from_path(path: impl AsRef<Path>, view: View) -> anyhow::Result<Self> {
             let path = path.as_ref().to_path_buf();
-            let file = File::open(&path)?;
-            let reader = BufReader::new(file);
 
             Ok(Self {
-                lines: reader.lines().collect::<Result<_, _>>()?,
+                lines: (fs::read_to_string(&path)? + "\n").lines().map(str::to_string).collect(),
                 cursor: Cursor::default(),
                 view,
                 file_path: Some(path),
