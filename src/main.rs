@@ -170,8 +170,8 @@ fn render_screen(screen: &Screen, stdout: &mut impl Write) -> anyhow::Result<()>
     let (last_line, lines) = screen.lines.split_last().context("coulnd't split")?;
     for line in lines {
         queue!(stdout, Print(line))?;
-        queue!(stdout, Print("\r\n"))?;
         queue!(stdout, Clear(ClearType::UntilNewLine))?;
+        queue!(stdout, Print("\r\n"))?;
     }
     queue!(stdout, Print(last_line))?;
     queue!(stdout, Clear(ClearType::UntilNewLine))?;
