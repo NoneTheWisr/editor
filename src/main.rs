@@ -42,13 +42,37 @@ fn main() -> anyhow::Result<()> {
 
                 (Mode::Insert, Esc, _) => mode = Mode::Normal,
                 (Mode::Normal, Char('i'), _) => mode = Mode::Insert,
+                (Mode::Normal, Char('a'), _) => {
+                    buffer.move_cursor(CursorMovement::Right);
+                    mode = Mode::Insert
+                }
+                (Mode::Normal, Char('I'), _) => {
+                    buffer.move_cursor(CursorMovement::TextStart);
+                    mode = Mode::Insert
+                }
+                (Mode::Normal, Char('A'), _) => {
+                    buffer.move_cursor(CursorMovement::LineEnd);
+                    mode = Mode::Insert
+                }
+                (Mode::Normal, Char('o'), _) => {
+                    buffer.move_cursor(CursorMovement::LineEnd);
+                    buffer.insert_line();
+                    mode = Mode::Insert
+                }
 
                 (Mode::Normal, Char('d'), _) => buffer.remove_char(),
+                (Mode::Normal, Char('D'), _) => buffer.remove_line(),
 
                 (Mode::Normal, Char('k'), _) => buffer.move_cursor(CursorMovement::Up),
                 (Mode::Normal, Char('j'), _) => buffer.move_cursor(CursorMovement::Down),
                 (Mode::Normal, Char('h'), _) => buffer.move_cursor(CursorMovement::Left),
                 (Mode::Normal, Char('l'), _) => buffer.move_cursor(CursorMovement::Right),
+
+                (Mode::Normal, Char('K'), _) => buffer.move_cursor(CursorMovement::FirstLine),
+                (Mode::Normal, Char('J'), _) => buffer.move_cursor(CursorMovement::LastLine),
+                (Mode::Normal, Char('H'), _) => buffer.move_cursor(CursorMovement::LineStart),
+                (Mode::Normal, Char('L'), _) => buffer.move_cursor(CursorMovement::LineEnd),
+                (Mode::Normal, Char('S'), _) => buffer.move_cursor(CursorMovement::TextStart),
 
                 (Mode::Normal, Char(':'), _) => read_command(&mut buffer)?,
 
@@ -121,13 +145,19 @@ fn read_command(buffer: &mut Buffer) -> anyhow::Result<()> {
 }
 
 fn process_command(buffer: &mut Buffer, command: String) -> anyhow::Result<()> {
+    use editor::buffer::CursorMovement;
+
     if command == "w" {
         buffer.save()?;
     } else if command.starts_with("w ") {
         buffer.save_as(shellexpand::full(&command[2..])?.as_ref())?;
     } else if command.starts_with("o ") {
         *buffer = Buffer::from_path(shellexpand::full(&command[2..])?.as_ref(), make_view()?)?;
+    } else if command.starts_with("g ") {
+        let line_number: usize = command[2..].parse()?;
+        buffer.move_cursor(CursorMovement::ToLine(line_number.saturating_sub(1)));
     }
+
     Ok(())
 }
 

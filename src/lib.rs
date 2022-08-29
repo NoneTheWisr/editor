@@ -148,6 +148,22 @@ pub mod buffer {
                 CursorMovement::LineEnd => {
                     self.cursor.x = self.line_len(self.cursor.y);
                 }
+                CursorMovement::TextStart => {
+                    self.cursor.x = self.lines[self.cursor.y]
+                        .find(|c: char| !c.is_whitespace()).unwrap_or_default();
+                }
+                CursorMovement::FirstLine => {
+                    self.cursor.y = 0;
+                    self.cursor.move_to_start_of_line();
+                }
+                CursorMovement::LastLine => {
+                    self.cursor.y = self.line_count().saturating_sub(1);
+                    self.cursor.move_to_start_of_line();
+                }
+                CursorMovement::ToLine(line_number) => {
+                    self.cursor.y = line_number;
+                    self.cursor.move_to_start_of_line();
+                }
             }
 
             self.adjust_view();
@@ -176,6 +192,15 @@ pub mod buffer {
             self.lines[self.cursor.y].replace_range(self.cursor.x.., "");
 
             self.cursor.move_to_start_of_next_line();
+        }
+
+        pub fn remove_line(&mut self) {
+            self.lines.remove(self.cursor.y);
+            self.cursor.move_to_start_of_line();
+
+            if self.lines.is_empty() {
+                self.lines.push(String::new());
+            }
         }
 
         pub fn join_lines(&mut self, first: usize, last: usize) {
@@ -316,6 +341,10 @@ pub mod buffer {
         Right,
         LineStart,
         LineEnd,
+        TextStart,
+        FirstLine,
+        LastLine,
+        ToLine(usize),
     }
 }
 
