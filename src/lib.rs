@@ -169,11 +169,13 @@ pub mod buffer {
         pub fn insert_char(&mut self, character: char) {
             self.lines[self.cursor.y].insert(self.cursor.x, character);
             self.cursor.move_right();
+            self.adjust_view();
         }
 
         pub fn insert_string(&mut self, string: &str) {
             self.lines[self.cursor.y].insert_str(self.cursor.x, string);
             self.cursor.x += string.len();
+            self.adjust_view();
         }
 
         pub fn remove_char(&mut self) {
@@ -194,12 +196,19 @@ pub mod buffer {
             self.lines[self.cursor.y].replace_range(self.cursor.x.., "");
 
             self.cursor.move_to_start_of_next_line();
+            self.adjust_view();
         }
 
         pub fn remove_line(&mut self) {
+            let should_move_cursor_up =
+                self.cursor_at_last_line() && self.line_count() > 1;
+
             self.lines.remove(self.cursor.y);
             self.cursor.move_to_start_of_line();
 
+            if should_move_cursor_up {
+                self.cursor.move_up();
+            }
             if self.lines.is_empty() {
                 self.lines.push(String::new());
             }
