@@ -86,6 +86,9 @@ pub mod buffer {
         }
 
         pub fn display(&self) -> crate::display::Screen {
+            use std::iter::repeat;
+            let empty_count = (self.view.max_y() + 1)
+                .saturating_sub(self.line_count());
             let lines = self
                 .lines
                 .iter()
@@ -97,6 +100,7 @@ pub mod buffer {
                         .take(self.view.width)
                         .collect()
                 })
+                .chain(repeat(String::from("")).take(empty_count))
                 .collect();
             let cursor = crate::display::Cursor {
                 x: self.cursor.x - self.view.min_x(),
