@@ -6,12 +6,12 @@ use editor::{
     display::{Cursor, Screen},
     terminal::AlternateScreen,
 };
-use std::env::args;
+use std::env;
 use std::io::{stdout, BufWriter, Write};
 
 fn main() -> anyhow::Result<()> {
     let _screen = AlternateScreen::new();
-    let args: Vec<String> = args().skip(1).collect();
+    let args: Vec<String> = env::args().skip(1).collect();
 
     let view = make_view()?;
     let buffer = match args.len() {
@@ -154,6 +154,8 @@ fn process_command(buffer: &mut Buffer, command: String) -> anyhow::Result<()> {
         buffer.save_as(shellexpand::full(&command[2..])?.as_ref())?;
     } else if command.starts_with("o ") {
         *buffer = Buffer::from_path(shellexpand::full(&command[2..])?.as_ref(), make_view()?)?;
+    } else if command.starts_with("cd "){
+        env::set_current_dir(shellexpand::full(&command[3..])?.as_ref())?;
     } else if command.starts_with("g ") {
         let line_number: usize = command[2..].parse()?;
         buffer.move_cursor(CursorMovement::ToLine(line_number.saturating_sub(1)));
