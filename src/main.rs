@@ -97,6 +97,8 @@ fn main() -> anyhow::Result<()> {
             }
 
             render(&buffer, &mode)?;
+        } else if let Event::Resize(_, _) = event {
+            render(&buffer, &mode)?;
         }
     }
 
@@ -138,6 +140,8 @@ fn read_command(buffer: &mut Buffer) -> anyhow::Result<()> {
                 _ => (),
             }
 
+            render_command_prompt(&command)?;
+        } else if let Event::Resize(_, _) = event {
             render_command_prompt(&command)?;
         }
     }
